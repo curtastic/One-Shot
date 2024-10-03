@@ -1,4 +1,14 @@
-var gGameX,gGameY,gGameSizeX=375,gGameSizeY=620,gScreenSizeX,gScreenSizeY,gCanvas,gPen,gGuys,gYou,gGravity=.2,gHits,gState,gLog=console.log.bind(console),u
+var gGameX,gGameY,
+	gGameSizeX=375,gGameSizeY=620,
+	gScreenSizeX,gScreenSizeY,
+	gCanvas,gPen,
+	gGuys,gYou,
+	gGravity=.2,
+	gHits,
+	gStarsGot,
+	gState,
+	gLog=console.log.bind(console),
+	u
 
 function gStateSet(state) {
 	gLog(`gStateSet() from ${gState} to ${state}`)
@@ -7,23 +17,29 @@ function gStateSet(state) {
 
 function gReset() {
 	gGuys = []
+	gGuyMake('star',170,350,20,20)
+	gGuyMake('bomb',220,150,40,40)
 	gGuyMake('guy',170,44,44,44)
 	gGuyMake('guy',170,244,44,44)
 	gGuyMake('wall',0,111-2,100,30+2*2)
 	gGuyMake('wall',gGameSizeX-100,111-2,100,30+2*2)
 	var wall = gGuyMake('wall',102,111,gGameSizeX-204,30)
 	wall.hp = 2
-	gGuyMake('wall',-999,-999,999,9999)
-	gGuyMake('wall',gGameSizeX,-999,999,9999)
+	var pad = 30
+	gGuyMake('wall',-999,-999,999+pad,9999)
+	gGuyMake('wall',gGameSizeX-pad,-999,999,9999)
 	gGuyMake('wall',-999,-999,9999,999)
 	gGuyMake('wall',-999,gGameSizeY,9999,999)
 	gYou = gGuyMake('ball',-99999,22,8,22)
 	gHits = 0
+	gStarsGot = 0
 	gStateSet('input')
 }
 
 function gGuyMake(kind,x,y,sizeX,sizeY) {
 	var guy = {kind,x,y,sizeX,sizeY,speedX:0,speedY:0,hp:9999}
+	if(kind=='bomb')guy.hp=1
+	if(kind=='star')guy.hp=0
 	gGuys.push(guy)
 	return guy
 }
@@ -46,14 +62,30 @@ function gGuyHitGuy(guy) {
 						}
 					}
 				} else {
-					gHits++
-					guy2.hp--
-					if(guy2.hp < 1) {
-						guy2.hp = 0
+					if(guy2.kind == 'star') {
 						guy2.dead = 1
+						gStarsGot++
+					} else {
+						gHits++
+						guy2.hp--
+						if(guy2.hp < 1) {
+							guy2.hp = 0
+							guy2.dead = 1
+						}
+						return guy2
 					}
-					return guy2
 				}
+			}
+		}
+	}
+}
+
+function gBombGo(guy) {
+	for(var guy2 of gGuys) {
+		if(guy2 != guy && guy2 != gYou && guy2.hp < 3) {
+			if(gRectsHit(guy.x-guy.sizeX, guy.y-guy.sizeY, guy.sizeX*3, guy.sizeY*3, guy2)) {
+				guy2.hp = 0
+				guy2.dead = 1
 			}
 		}
 	}
@@ -62,7 +94,15 @@ function gGuyHitGuy(guy) {
 function gUpdate() {
 	for(var guy of gGuys) {
 		if(guy.dead) {
+			if(guy.kind == 'bomb') {
+				gBombGo(guy)
+			}
 			gArrayRemove(gGuys, guy)
+		}
+	}
+	
+	for(var guy of gGuys) {
+		if(guy.dead) {
 			continue
 		}
 		if(guy.kind == 'ball') {
@@ -110,7 +150,17 @@ function gDraw() {
 	gPen.translate(gGameX,gGameY)
 	
 	for(var guy of gGuys) {
-		if(guy.kind == 'wall') {
+		if(guy.kind == 'star') {
+			gPen.fillStyle = '#FF0'
+			var add = guy.dead ? 1 : 0
+			gPen.fillRect(guy.x-add, guy.y-add, guy.sizeX+add*2, guy.sizeY+add*2)
+			gPen.fillText('⭐', guy.x+guy.sizeX/2, guy.y+guy.sizeY/2)
+		} else if(guy.kind == 'bomb') {
+			gPen.fillStyle = guy.dead ? '#FFB' : '#F99'
+			var add = guy.dead ? guy.sizeX : 0
+			gPen.fillRect(guy.x-add, guy.y-add, guy.sizeX+add*2, guy.sizeY+add*2)
+			gPen.fillText('💣', guy.x+guy.sizeX/2, guy.y+guy.sizeY/2)
+		} else if(guy.kind == 'wall') {
 			gPen.fillStyle = '#999'
 			if(guy.hp < 3)
 				gPen.fillStyle = '#D73'
@@ -155,6 +205,7 @@ function gDraw() {
 				gPen.globalAlpha = 1-guy.got/11
 			}
 			gPen.fillRect(guy.x, guy.y, guy.sizeX, guy.sizeY)
+			gPen.fillText('👽', guy.x+guy.sizeX/2, guy.y+guy.sizeY/2)
 			gPen.globalAlpha = 1
 		}
 		
@@ -194,12 +245,17 @@ function gDraw() {
 
 	gPen.fillStyle = '#FF0'
 	gPen.font = '20px arial'
-	gPen.textAlign = 'center'
-	gPen.fillText("Bounces: "+gHits, gScreenSizeX/2, 22)
+	gPen.fillText("Bounces: "+gHits, gScreenSizeX/2, 20)
 
 	if(gState == 'win') {
-		gPen.fillText("You win!", gScreenSizeX/2, 44)
-		gPen.fillText("Score: 1000➗"+gHits+" = 🏆"+Math.floor(1000/gHits), gScreenSizeX/2, 66)
+		gPen.fillText("You win!", gScreenSizeX/2, 45)
+		var hitsScore = Math.floor(1000/gHits)
+		var starsScore = Math.floor(100*gStarsGot)
+		gPen.fillText("Bounce Score: 1000÷"+gHits+" = 🏆"+hitsScore, gScreenSizeX/2, 70)
+		gPen.fillText("Star Score: 100×"+gStarsGot+" = 🏆"+starsScore, gScreenSizeX/2, 95)
+		gPen.font = '36px arial'
+		gPen.fillText("🏆"+(hitsScore+starsScore), gScreenSizeX/2, 135)
+		gPen.font = '20px arial'
 	}
 	
 	gin.clickReleasedDraw = 0
@@ -254,6 +310,8 @@ function gResize(recur) {
 		setTimeout(() => gResize(1), 111)
 	}
 	gPen = gCanvas.getContext('2d')
+	gPen.textAlign = 'center'
+	gPen.textBaseline = 'middle'
 }
 
 window.onload = () => {
