@@ -1,22 +1,8 @@
-/*
-	gin.js
-	An input library.
-	This is for projects that have a game loop running.
-	You don't set callbacks, you just check if(gin.clickStarted) etc. inside your game loop.
-	Features:
-	- Check which keys are currently down, or just now hit, or just now released.
-	- Mouse position and speed and scroll speed.
-	- Dragging/swipe direction.
-	- Scroll acceleration.
-	- Two finger scroll.
-	- Pinch detection, with position and speed.
-	- Which HTML element the mouse is over and clicked.
-	- Supports old devices/browsers including IE11 and iOS9.
-	Does not include:
-	- Controller support.
-*/
-
 var gin = {
+	// If your whole game is offset on the screen, you can set these.
+	offsetX: 0,
+	offsetY: 0,
+	scale: 1,
 	// Is keyDown[key code] is true if that key is currently being pressed down.
 	keyDown: [],
 	// Is keyHit[key code] is true if that key was just pressed this frame.
@@ -44,7 +30,7 @@ var gin = {
 	clicked: null,
 	// Set this to true when you don't want the default web page behaviour to happen, such as swipe to scroll the page.
 	// When set to true this still allows default clicks on buttons and anchors and inputs. You can set it to a function instead.
-	preventDefault: false,
+	preventDefault: true,
 	// An array of mouse objects created, where [0] is the standard mouse, and [1] is a finger that has pressed the screen.
 	// indexes after 1 only exist if multiple fingers have pressed the screen at the same time.
 	mouses: [],
@@ -113,17 +99,20 @@ var gin = {
 				return gin.preventDefault(e)
 			}
 		}
+
+		var mousePosSet = function(mouse, x, y) {
+			gin.mouseX = mouse.x = x / gin.scale - gin.offsetX
+			gin.mouseY = mouse.y = y / gin.scale - gin.offsetY
+			
+			//mouse.overDiv = e.target
+		}
 		
 		var clickMoved = function(mouse) {
-			var x = mouse.x
-			var y = mouse.y
-			gin.clickX = mouse.clickX = x
-			gin.clickY = mouse.clickY = y
 			
 			// If you drag more than 4 pixels, gin will consider it a swipe and not a click.
 			var max = 4
-			var distX = mouse.clickStartX - x
-			var distY = mouse.clickStartY - y
+			var distX = mouse.clickStartX - mouse.x
+			var distY = mouse.clickStartY - mouse.y
 			if(Math.abs(distX) > max || Math.abs(distY) > max) {
 				if(Math.abs(distX) > Math.abs(distY)) {
 					mouse.dragWay = distX > 0 ? 'r' : 'l'
@@ -133,7 +122,7 @@ var gin = {
 			}
 		}
 		
-		var clickStarted = function(e, mouse) {
+		var clickStarted = function(mouse) {
 			mouse.clicking = true
 			gin.clickStarted = mouse
 			gin.clicking = mouse
@@ -142,15 +131,12 @@ var gin = {
 			
 			mouse.dragWay = ''
 			
-			gin.mouseHitDiv = e.target
-			mouse.overDiv = e.target
+			//gin.mouseHitDiv = e.target
+			//mouse.overDiv = e.target
 		}
 
-		var clickEnded = function(e, mouse) {
+		var clickEnded = function(mouse) {
 			mouse.clicking = false
-			
-			gin.mouseX = mouse.x
-			gin.mouseY = mouse.y
 			
 			gin.clickReleased = mouse
 			
@@ -180,19 +166,17 @@ var gin = {
 			for(var i=0; i<e.changedTouches.length; i++) {
 				var touch = e.changedTouches[i]
 				var mouse = mouseAdd(touch.identifier)
-				gin.mouseX = mouse.x = touch.clientX
-				gin.mouseY = mouse.y = touch.clientY
+				mousePosSet(mouse, touch.clientX, touch.clientY)
 				
 				if(e.type == 'touchstart')
-					clickStarted(e, mouse)
+					clickStarted(mouse)
 				else if(e.type == 'touchend' || e.type == 'touchcancel')
-					clickEnded(e, mouse)
-				else if(e.type == 'touchmove')
-				{
+					clickEnded(mouse)
+				else if(e.type == 'touchmove') {
 					clickMoved(mouse)
 					
 					//e.target is not the div under the finger, it's the div the touch started at for some reason.
-					mouse.overDiv = document.elementFromPoint(mouse.x, mouse.y)
+					//mouse.overDiv = document.elementFromPoint(mouse.x, mouse.y)
 				}
 			}
 			if(!blockTaps(e)) {
@@ -210,22 +194,16 @@ var gin = {
 		// On iPhone it also makes a onmouseup on around the frame after touchend. So we'd get double clicks if we listen for both touchend and mouseup.
 		if(!gin.mobile) {
 			window.addEventListener("mousemove", function(e) {
-				var mouse = gin.mouseReal
-				gin.mouseX = mouse.x = e.clientX
-				gin.mouseY = mouse.y = e.clientY
-				
-				mouse.overDiv = e.target
-				
-				if(mouse.clicking) {
-					clickMoved(mouse)
+				mousePosSet(gin.mouseReal, e.clientX, e.clientY)
+				if(gin.mouseReal.clicking) {
+					clickMoved(gin.mouseReal)
 				}
 			})
 			
 			window.addEventListener("mousedown", function(e) {
 				keysCheck(e)
-				gin.mouseReal.x = e.clientX
-				gin.mouseReal.y = e.clientY
-				clickStarted(e, gin.mouseReal)
+				mousePosSet(gin.mouseReal, e.clientX, e.clientY)
+				clickStarted(gin.mouseReal)
 				if(!blockTaps(e)) {
 					return true
 				}
@@ -234,7 +212,8 @@ var gin = {
 			
 			window.addEventListener("mouseup", function(e) {
 				keysCheck(e)
-				clickEnded(e, gin.mouseReal)
+				mousePosSet(gin.mouseReal, e.clientX, e.clientY)
+				clickEnded(gin.mouseReal)
 			})
 		}
 		
