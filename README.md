@@ -9,7 +9,11 @@ https://curtastic.com/lazersniper
 
 # Credits
 Programmer, Level Designer, Font Artist, Audio Editor, Hyplay Integration - Curtis Robinson (a.k.a @curtastic)
+
 Game Digital Artist - Jerico Despe (a.k.a @acerstructor)
+
 Music - Kevin MacLeod
+
 Sound effects - ZapSplat
+
 Note: this game was made in 2 weeks for HYPLAY game jam.
