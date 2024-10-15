@@ -1,6 +1,10 @@
 var gGameX,gGameY,
-	gAppVersion=39,
+	gStorage = localStorage || {},
+	gStoragePrefix = 'lazerSniper',
+	gAppVersion=44,
 	gGameSizeX=192,gGameSizeY=312,
+	gScores,gScoresGetError,
+	gScore,gScoreSaveLoading,
 	gGameScale=1,
 	gScreenSizeX,gScreenSizeY,
 	gCanvasSizeX,gCanvasSizeY,
@@ -14,20 +18,21 @@ var gGameX,gGameY,
 	gStarsGot,
 	gState,
 	gMuted,
-	gloops=0,
+	gLoops=0,
 	gLog=console.log.bind(console),
 	gGrid=[],
 	gGridSizeX=8,
 	gGridSizeY=13,
 	gTileSizeX=24,gTileSizeY=24,
-	gStateLoop,gStateLoops=0,
+	gStateLoop,gStateLoops=0,gStateDraws=0,
+	gLoginError,
 	u
 
 function gStateSet(state) {
 	gLog("gStateSet() from "+gState+" to "+state)
 	gState = state
-	gStateLoop = gloops
-	gStateLoops = 0
+	gStateLoop = gLoops
+	gStateLoops = gStateDraws = 0
 }
 
 function gGridRect(value, x,y,sizeX,sizeY) {
@@ -45,10 +50,18 @@ function gReset() {
 	gGridRect(1, 0,0,gGridSizeX,gGridSizeY)
 	
 	gGuys = []
+	gYouStartTime = gYouEndTime = 0
+	gHits = 0
+	gStarsGot = 0
+	if(gLevel == 1) {
+		gScore = 0
+	}
+	
 	if(gLevel == 1) {
 		gGridRect(0, 2,1, 4,gGridSizeY-2)
 		
 		gGuyMake('guy',88,66)
+		gGuyMake('star',88,88,1)
 		gGuyMake('guy',88,110)
 	}
 	if(gLevel == 2) {
@@ -58,6 +71,7 @@ function gReset() {
 		gGuyMake('guy',28,40)
 		gGuyMake('guy',28,66)
 		gGuyMake('guy',88,210)
+		gGuyMake('star',50,160,0,1)
 	}
 	if(gLevel == 3) {
 		gGuyMake('bomb',144,40)
@@ -77,7 +91,7 @@ function gReset() {
 		gGridRect(1, 1,1,3,4)
 		gGridRect(1, gGridSizeX-3,8,2,2)
 		
-		//gGuyMake('star',70,200)
+		gGuyMake('star',70,200,1)
 		gGuyMake('guy',111,250)
 		//gGuyMake('crate',144,166)
 		//gGuyMake('crate',144,186)
@@ -85,38 +99,120 @@ function gReset() {
 		//gGuyMake('crate',144,226)
 	}
 	if(gLevel == 4) {
-		gGridRect(0, 1,1,gGridSizeX-2,gGridSizeY-3)
+		gGridRect(0, 1,2,gGridSizeX-2,gGridSizeY-4)
+		var y=24
 		for(var x=1;x<7;x++) {
-			gGuyMake('bomb',x*24,46)
-			gGuyMake('crate',x*24,66)
-			gGuyMake('crate',x*24,86)
-			gGuyMake('crate',x*24,106)
-			gGuyMake('crate',x*24,126)
+			gGuyMake('bomb',x*24,46+y)
+			gGuyMake('crate',x*24,66+y)
+			gGuyMake('crate',x*24,86+y)
+			gGuyMake('crate',x*24,106+y)
+			gGuyMake('crate',x*24,126+y)
 		}
-		gGuyMake('guy',111,150)
-		gGuyMake('guy',30,25)
+		gGuyMake('guy',111,150+y)
+		gGuyMake('guy',30,25+y)
+		gGuyMake('star',50,180+y,1)
+		gGuyMake('star',80,210+y,1)
 	}
-	if(gLevel >= 5) {
+	if(gLevel == 5) {
+		gGridRect(0, 2,1, 4,gGridSizeY-2)
+		
+		gGuyMake('guy',111,44)
+		gGuyMake('guy',88,66)
+		gGuyMake('star',50,100,3)
+		gGuyMake('guy',88,133)
+	}
+	if(gLevel == 6) {
+		gGridRect(0, 1,5,gGridSizeX-2,gGridSizeY-6)
+		
+		gGuyMake('guy',88,122)
+		gGuyMake('guy',28,195)
+		gGuyMake('guy',150,195)
+		gGuyMake('guy',88,266)
+		gGuyMake('star',50,155,1)
+		gGuyMake('star',50,177,0,1)
+	}
+	if(gLevel == 7) {
+		gGridRect(0, 1,5,gGridSizeX-2,gGridSizeY-6)
+
+		for(var x=0; x<5; x++) {
+			gGuyMake('guy',50+x*18,222)
+			gGuyMake('guy',50+x*18,222+18)
+		}
+		gGuyMake('star',95,265,1,1)
+	}
+	if(gLevel == 8) {
+		gGridRect(0, 1,5,gGridSizeX-2,gGridSizeY-6)
+
+		for(var x=0; x<5; x++) {
+			gGuyMake('guy',50+x*18,122)
+			gGuyMake('guy',50+x*18,222+18)
+		}
+		gGuyMake('star',50,266,1)
+	}
+	if(gLevel == 9) {
+		gGridRect(0, 1,5,gGridSizeX-2,gGridSizeY-6)
+
+		gGuyMake('guy',80,117)
+		gGuyMake('guy',100,117)
+		for(var y=0; y<3; y++) {
+			for(var x=0; x<3; x++) {
+				var kind = 'crate'
+				if(x==1&&y==1) {
+					kind = 'bomb'
+				} else {
+					if(x!=1 && y!=1) {
+						kind = 'guy'
+					}
+				}
+				gGuyMake(kind,60+x*23+(kind=='guy')*5,160+y*20)
+			}
+		}
+	}
+		/*
+	if(gLevel == 10) {
+		gGridRect(0, 2,3,gGridSizeX-4,gGridSizeY-4)
+		gGridRect(1, 2,3,1,2)
+		gGridRect(1, 2,9,1,3)
+		gGuyMake('guy',80,66)
+		gGuyMake('guy',50,120)
+		gGuyMake('guy',50,196)
+		gGuyMake('guy',74,207)
+		
+		for(var x=0; x<6; x++) {
+			gGuyMake('guy2',49+x*16,122)
+		}
+		for(var x=0; x<4; x++) {
+			gGuyMake('bomb',48+x*24,99)
+		}
+	}
+		*/
+	if(gLevel == 10) {
 		gGridRect(0, 1,2,gGridSizeX-2,gGridSizeY-3)
 
+		var rando = Math.random()*60+8 | 0
 		for(var i=0;i<77;i++) {
 			var x = (Math.random()*(gGridSizeX-3)+1)*gTileSizeX
 			var y = gTileSizeY*2+i/77*(gGridSizeY-4)*gTileSizeY
-			if(i==22||i==33)
+			if(i==rando)
 				gGuyMake('bomb',100,y)
 			else
-				gGuyMake('guy',x,y)
+				gGuyMake(i%5==0?'star':'guy',x,y)
 		}
 	}
 	
-	gYou = gGuyMake('ball',-99999,22,5,5)
-	gYouStartTime = gYouEndTime = 0
-	gHits = 0
-	gStarsGot = 0
-	gStateSet('input')
+	gYou = gGuyMake('ball',-99999,22)
+	
+	if(gLevel > 10) {
+		gStateSet('victory')
+		gAudio.play(gWinSound)
+		gScoreSave()
+	} else {
+		gStateSet('input')
+	}
 }
 
-function gGuyMake(kind,x,y,sizeX,sizeY) {
+function gGuyMake(kind,x,y,speedX,speedY,sizeX,sizeY) {
+	var hpMax
 	if(kind=='bomb'||kind=='crate'){
 		sizeX=25
 		sizeY=24
@@ -126,25 +222,51 @@ function gGuyMake(kind,x,y,sizeX,sizeY) {
 		sizeY=13
 	}
 	if(kind=='guy'){
+		hpMax = 1
+	}
+	if(kind=='guy2'){
+		hpMax = 2
+		kind = 'guy'
+	}
+	if(kind=='guy'){
 		sizeX=14
 		sizeY=20
 	}
-	var guy = {kind,x,y,oldX:0,oldY:0,oldX2:0,oldY2:0,sizeX,sizeY,speedX:0,speedY:0,hp:9999}
-	if(kind=='guy')guy.hp=1
+	if(kind=='ball'){
+		sizeX=4
+		sizeY=4
+	}
+	speedX = speedX||0
+	speedY = speedY||0
+	var guy = {kind,x,y,oldX:0,oldY:0,oldX2:0,oldY2:0,sizeX,sizeY,speedX,speedY,hp:9999}
+	if(kind=='guy')guy.hp=hpMax
 	if(kind=='bomb')guy.hp=1
 	if(kind=='star')guy.hp=0
 	if(kind=='crate')guy.hp=1
+	guy.hpMax = hpMax||guy.hp
 	gGuys.push(guy)
 	return guy
 }
 
-function gGuyHit(guy) {
+function gGuyHit(guy, checkOnly) {
 	for(var guy2 of gGuys) {
 		if(guy2 != guy && !guy2.dead) {
+			if(guy.kind == 'star' && guy2.kind=='ball')continue
 			if(gRectsHit(guy.x, guy.y, guy.sizeX, guy.sizeX, guy2)) {
+				if(checkOnly) {
+					if(guy2.kind == 'star')continue
+					return guy2
+				}
+				if(guy.kind == 'star')return guy
 				if(guy2.kind == 'guy') {
-					guy2.dead = 1
-					gAudio.play(gGuyDieSound, guy2.x/gGameSizeX)
+					guy2.hp--
+					if(guy2.hp < 1) {
+						guy2.dead = 1
+						gAudio.play(gGuyDieSound, guy2.x/gGameSizeX)
+					} else {
+						guy2.hitLoop = gLoops
+						return guy
+					}
 				} else {
 					if(guy2.kind == 'star') {
 						guy2.dead = 1
@@ -158,6 +280,9 @@ function gGuyHit(guy) {
 							guy2.dead = 1
 							if(guy2.kind == 'bomb') {
 								gAudio.play(gExplodeSound, guy2.x/gGameSizeX)
+							}
+							if(guy2.kind == 'crate') {
+								gAudio.play(gCrateSound, guy2.x/gGameSizeX)
 							}
 						}
 						return guy2
@@ -222,7 +347,7 @@ function gUpdate() {
 	}
 
 	if(!stall) {
-		gloops++
+		gLoops++
 		for(var guy of gGuys) {
 			if(guy.dead) {
 				if(guy.kind == 'guy') {
@@ -236,24 +361,26 @@ function gUpdate() {
 				}
 				continue
 			}
-			if(guy.kind == 'ball') {
-				if(gState == 'go') {
-					guy.oldX2 = guy.oldX
-					guy.oldY2 = guy.oldY
-					guy.oldX = guy.x
-					guy.oldY = guy.y
-					var old = guy.x
-					guy.x += guy.speedX
-					if(gGuyHit(guy)) {
-						guy.x = old
-						guy.speedX =- guy.speedX
+			if((guy.kind == 'ball' && gState == 'go') || guy.kind=='star') {
+				guy.oldX2 = guy.oldX
+				guy.oldY2 = guy.oldY
+				guy.oldX = guy.x
+				guy.oldY = guy.y
+				var old = guy.x
+				guy.x += guy.speedX
+				if(gGuyHit(guy)) {
+					guy.x = old
+					guy.speedX =- guy.speedX
+					if(guy.kind == 'ball') {
 						gAudio.play(gBounceSound, guy.x/gGameSizeX)
 					}
-					var old = guy.y
-					guy.y += guy.speedY
-					if(gGuyHit(guy)) {
-						guy.y = old
-						guy.speedY =- guy.speedY
+				}
+				var old = guy.y
+				guy.y += guy.speedY
+				if(gGuyHit(guy)) {
+					guy.y = old
+					guy.speedY =- guy.speedY
+					if(guy.kind == 'ball') {
 						gAudio.play(gBounceSound, guy.x/gGameSizeX)
 					}
 				}
@@ -277,6 +404,9 @@ function gUpdate() {
 
 	if(gin.clickReleased) {
 		gin.clickReleasedDraw = gin.clickReleased
+	}
+	if(gin.clickStarted) {
+		gin.clickStartedDraw = gin.clickStarted
 	}
 	gin.update()
 }
@@ -413,6 +543,8 @@ function gDraw() {
 			var y = guy.y-guy.sizeX/2
 			var distX = guy.oldX2-guy.x
 			var distY = guy.oldY2-guy.y
+			gl1.rectDraw(drawX+1, drawY-1, guy.sizeX-2, guy.sizeX+2, 0x5577FF7F)
+			gl1.rectDraw(drawX-1, drawY+1, guy.sizeX+2, guy.sizeX-2, 0x5577FF7F)
 			for(var i=0;i<9;i++) {
 				var far = i/9
 				var a = (1-far)*127|0
@@ -421,20 +553,31 @@ function gDraw() {
 		} else {
 			var scale = 1
 			if(guy.dead) {
-				
-				var frame = Math.min(~~((guy.dead-1)/2), gAlienDieImages.length-1)
-				var image = gAlienDieImages[frame]
+				var images = guy.hpMax>1?gAlien2DieImages:gAlienDieImages
+				var frame = Math.min(~~((guy.dead-1)/2), images.length-1)
+				var image = images[frame]
 				gl1.imageDraw(image, drawX-9*scale, drawY-1*scale, image.sizeX*scale, image.sizeY*scale)
 				//gl1.rectDraw(drawX, drawY, guy.sizeX, guy.sizeY, 0x00FF0022)
 			} else {
-				var frame = ~~((gloops/5+guy.y)%4)
-				var image = gAlienImages[frame]
+				var frame = ~~((gLoops/5+guy.y)%4)
+				var image = (guy.hpMax>1?gAlien2Images:gAlienImages)[frame]
+				if(guy.hitLoop && gLoops-guy.hitLoop<10) {
+					image = gAlien2HitImage
+					if(gLoops-guy.hitLoop>5) {
+						image = gAlien2DieImages[0]
+					}
+				}
+				image.rgb = (guy.hp<guy.hpMax) ? 0xBBBBBB7F: u
 				gl1.imageDraw(image, drawX-9*scale, drawY-1*scale, image.sizeX*scale, image.sizeY*scale)
 				//gl1.rectDraw(drawX, drawY, guy.sizeX, guy.sizeY, 0x00FF0022)
 			}
 		}
 		//gl1.rectDraw(drawX, drawY, guy.sizeX, guy.sizeY, 0x00FF0022)
 		
+	}
+	
+	if(gState == 'input' && gin.clickStartedDraw) {
+		gClickDownSoundPlay()
 	}
 	
 	if(gState == 'input' || gState == 'aim') {
@@ -456,7 +599,11 @@ function gDraw() {
 			gYou.oldX2 = gYou.x+gYou.speedX*7
 			gYou.oldY2 = gYou.y+gYou.speedY*7
 			
-			if(gBoxHitGrid(guy)) {
+			if(gGuyHit(guy,1)) {
+				if(gin.clickReleasedDraw) {
+					gStateSet('input')
+					gYou.x = -9999
+				}
 			} else {
 		
 				var size = 16
@@ -485,63 +632,182 @@ function gDraw() {
 		}
 	}
 
-	var time = 0
+	var sec = 0, hundo = '0'
 	if(gYouStartTime) {
-		time = gloop.time-gYouStartTime
+		var time = gloop.time-gYouStartTime
 		if(gYouEndTime) {
 			time = gYouEndTime-gYouStartTime
 		}
-		var sec = time/1000|0
-		var hundo = ((time % 1000)/10|0)+''
-		if(hundo.length<2)hundo='0'+hundo
-		time = sec+"."+hundo
+		sec = time/1000|0
+		hundo = ((time % 1000)/10|0)+''
 	}
-	glText.draw("Time: "+time, gGameSizeX/2, 4-gGameY, 1, 1)
-
-	if(gState == 'title') {
-		gCursorSet()
-		gl1.drawRect(0, 0, gCanvasSizeX, gCanvasSizeY, 0x44)
-		gl1.imageDraw(gLogoImage,gGameSizeX/2-gLogoImage.sizeX/2,10)
-		glText.draw((gin.mobile?"TAP":"CLICK")+" TO PLAY", gGameSizeX/2, 230, 1, 1, 0x3FFF3F00+40+Math.floor(Math.abs(Math.sin(gloops*.1)*87)))
-		if(gin.clickReleasedDraw) {
-			gStateSet('input')
-		}
+	if(hundo.length<2)hundo='0'+hundo
+	glText.draw("[time]"+sec+"."+hundo, gGameSizeX/2, 4-gGameY, 1, 1)
+	if(gCanvasSizeX < 244) {
+		glText.draw("[score]"+gScore, gGameSizeX/2, 22-gGameY, 1, 1)
+	} else {
+		glText.draw("[score]"+gScore, 32-gGameX, 4-gGameY)
+		glText.draw("[level]"+gLevel+'/10', gCanvasSizeX-gGameX-91, 4-gGameY)
 	}
 	
-	if(gState == 'win') {
-		gl1.drawRect(0, 0, gCanvasSizeX, gCanvasSizeY, 0x33)
-		glText.draw("CLEARED!", gGameSizeX/2, 45, 2, 1)
-		var time = gYouEndTime-gYouStartTime
-		var timeScore = Math.floor(100000/time)
-		var starsScore = Math.floor(100*gStarsGot)
-		glText.draw("Time Bonus\n[score]"+timeScore, gGameSizeX/2, 90, 1, 1)
-		glText.draw("Star Score\n"+gStarsGot+"x100 = [score]"+starsScore, gGameSizeX/2, 140, 1, 1)
-		glText.draw("[score]"+(timeScore+starsScore), gGameSizeX/2, 190, 2, 1)
-		glText.draw((gin.mobile?"Tap":"Click")+" to continue", gGameSizeX/2, 230, 1, 1, 0xFFFFFF00+40+Math.floor(Math.abs(Math.sin(gloops*.1)*87)))
-	}
-
-	if(1) {
-		var x = gCanvasSizeX-gGameX-30
-		var y = 4-gGameY+(onBox && gin.clicking?2:0)
-		var onBox = gRectsHit(x, y, gMuteButton.sizeX, gMuteButton.sizeY, gin.mouseX, gin.mouseY,1,1)
-		if(onBox)gCursorSet()
-		gl1.imageDraw(gMuted ? gMutedButton: gMuteButton, x, y)
-		if(gin.clickReleasedDraw && onBox) {
+	var muteX = gCanvasSizeX-gGameX-30
+	var muteY = 4-gGameY+(onBox && gin.clicking?2:0)
+	var muteHover = gRectsHit(muteX, muteY, gMuteButton.sizeX, gMuteButton.sizeY, gin.mouseX, gin.mouseY,1,1)
+	if(muteHover) {
+		gCursorSet()
+		if(gin.clickReleasedDraw) {
 			gin.clickReleasedDraw = 0
 			gMuted = !gMuted
 			if(gMuted) {
 				gAudio.stopAll()
 			} else {
 				gAudio.play(gPlayMusic)
+				gClickUpSoundPlay()
+			}
+			gStorageSet('muted', gMuted ? 1: 0)
+		}
+	}
+
+	if(gState == 'login') {
+		gCursorSet()
+		gl1.drawRect(0, 0, gCanvasSizeX, gCanvasSizeY, 0x44)
+		gl1.imageDraw(gLogoImage,gGameSizeX/2-gLogoImage.sizeX/2,10)
+		glText.draw((gin.mobile?"TAP":"CLICK")+" TO LOG IN\nWITH HYPLAY", gGameSizeX/2, 155, 1, 1, 0x3FFF3F00+40+Math.floor(Math.abs(Math.sin(gLoops*.1)*87)))
+	}
+	
+	if(gState == 'loginLoading') {
+		gl1.drawRect(0, 0, gCanvasSizeX, gCanvasSizeY, 0x44)
+		gl1.imageDraw(gLogoImage,gGameSizeX/2-gLogoImage.sizeX/2,10)
+		if(gLoginError) {
+			glText.draw("Failed to log in.\nHYPLAY user required.", gGameSizeX/2, 155, 1, 1, 0x3FF55557F)
+		} else {
+			glText.draw("Logging in[...]", gGameSizeX/2, 160, 1, 1, 0x3FFF3F00+60+Math.floor(Math.abs(Math.sin(gLoops*.05)*67)))
+		}
+	}
+	
+	var scroll = 0
+	if(gStateLoops > 200 && gScores && gScores.length > 3) {
+		scroll = gStateLoops-200
+		if(scroll > 160)scroll=160
+	}
+	
+	if(gState == 'title') {
+		gCursorSet()
+		gl1.drawRect(0, 0, gCanvasSizeX, gCanvasSizeY, 70+Math.min(scroll,30))
+		gl1.imageDraw(gLogoImage,gGameSizeX/2-gLogoImage.sizeX/2,10-scroll)
+		if(!scroll) {
+			glText.draw("Hi "+gStorageGet('hyplayUsername')+"!", gGameSizeX/2, 150, 1, 1)
+			glText.draw((gin.mobile?"TAP":"CLICK")+" TO PLAY", gGameSizeX/2, 170, 1, 1, 0x3FFF3F00+40+Math.floor(Math.abs(Math.sin(gLoops*.1)*87)))
+		}
+		if(gin.clickStartedDraw) {
+			gClickDownSoundPlay()
+		}
+		if(gin.clickReleasedDraw) {
+			if(scroll) {
+				scroll = 0
+				gStateLoops = 0
+			} else {
+				gClickUpSoundPlay()
+				gStateSet('input')
 			}
 		}
 	}
-	if(gState == 'win') {
-		if(gin.clickReleasedDraw) {
-			gLevel++
-			gReset()
+	
+	if(gState == 'login' || gState == 'loginLoading' || gState == 'title') {
+		glText.draw("HIGH SCORES", gGameSizeX/2, 200-scroll, 1, 1)
+		if(gScores === u) {
+			glText.draw(gScoresGetError ? "Error" : "[...]", gGameSizeX/2, 216-scroll, 1, 1)
+		} else {
+			if(gScores.length) {
+				gScores.forEach((score,i) => {
+					if(i>2 && !scroll)return
+					var y = 224+i*18-scroll
+					
+					var pad = -10
+					if(gCanvasSizeX < 214) {
+						pad = (200-gCanvasSizeX)/2
+					}
+					
+					var name = score.username
+					var max = 13
+					if(pad>0) {
+						max -= (pad+5)/5|0
+					}
+					if(name.length > max) {
+						name = name.substr(0,max)+'...'
+					}
+					glText.draw((i+1)+". "+name, pad+2, y)
+					glText.draw("[score]"+score.score, gGameSizeX-54-pad, y)
+				})
+			} else {
+				glText.draw("none", gGameSizeX/2, 224, 1, 1)
+			}
 		}
 	}
+	
+	if(gState == 'win') {
+		
+		gl1.drawRect(0, 0, gCanvasSizeX, gCanvasSizeY, 0x33)
+		glText.draw("Level "+gLevel, gGameSizeX/2, 35, 1, 1)
+		glText.draw("CLEARED!", gGameSizeX/2, 50, 2, 1)
+		var time = gYouEndTime-gYouStartTime
+		var timeScore = Math.floor(100000/time)
+		var starsScore = Math.floor(100*gStarsGot)
+		var levelScore = timeScore+starsScore
+		if(gStateDraws == 20 || gStateDraws == 40 || gStateDraws == 60) {
+			gAudio.play(gScoreSound)
+		}
+		if(gStateLoops > 20) {
+			glText.draw("Time Score\n[score]"+timeScore, gGameSizeX/2, 90, 1, 1)
+		}
+		if(gStateLoops > 40) {
+			glText.draw("Star Score\n"+gStarsGot+"x100 = [score]"+starsScore, gGameSizeX/2, 135, 1, 1)
+		}
+		if(gStateLoops > 60) {
+			glText.draw("[score]"+levelScore, gGameSizeX/2, 180, 2, 1)
+		}
+		if(gStateLoops > 80) {
+			gCursorSet()
+			glText.draw((gin.mobile?"Tap":"Click")+" to continue", gGameSizeX/2, 230, 1, 1, 0xFFFFFF00+40+Math.floor(Math.abs(Math.sin(gLoops*.1)*87)))
+			if(gin.clickReleasedDraw) {
+				gScore += levelScore
+				gLevel++
+				gReset()
+				if(!gAudio.isPlaying(gPlayMusic)) {
+					gAudio.play(gPlayMusic)
+				}
+				gClickUpSoundPlay()
+			}
+			if(gin.clickStartedDraw) {
+				gClickDownSoundPlay()
+			}
+		}
+	}
+
+	if(gState == 'victory') {
+		gl1.drawRect(0, 0, gCanvasSizeX, gCanvasSizeY, 0x33)
+		glText.draw("YOU WIN!", gGameSizeX/2, 45, 2, 1)
+		glText.draw("The entire ship is\ncleared of aliens!", gGameSizeX/2, 90, 1, 1)
+		glText.draw("Final Score:", gGameSizeX/2, 140, 1, 1)
+		glText.draw("[score]"+(gScore), gGameSizeX/2, 160, 2, 1)
+		if(gScoreSaveLoading) {
+			glText.draw("Saving score[...]", gGameSizeX/2, 230, 1, 1)
+		} else {
+			glText.draw((gin.mobile?"Tap":"Click")+" to continue", gGameSizeX/2, 230, 1, 1, 0xFFFFFF00+40+Math.floor(Math.abs(Math.sin(gLoops*.1)*87)))
+			if(gin.clickReleasedDraw) {
+				gClickUpSoundPlay()
+				gLevel = 1
+				gReset()
+				gStateSet('title')
+			}
+		}
+		if(gin.clickStartedDraw) {
+			gClickDownSoundPlay()
+		}
+	}
+
+	gl1.imageDraw(gMuted ? gMutedButton: gMuteButton, muteX, muteY+(muteHover && gin.clicking?2:0))
+	
 	if(gState == 'go' || gState == 'input' || gState == 'aim') {
 		var onBox = gRectsHit(4-gGameX,4-gGameY,gRetryButton.sizeX,gRetryButton.sizeY, gin.mouseX, gin.mouseY,1,1)
 		//gRetryButton.rgb = onBox && (gin.clicking || gin.clickReleasedDraw) ? 0x9999997F : u
@@ -554,13 +820,18 @@ function gDraw() {
 		}
 		gl1.imageDraw(gRetryButton,4-gGameX,4-gGameY+(onBox && gin.clicking?2:0))
 		if(gin.clickReleasedDraw && onBox) {
+			gClickUpSoundPlay()
 			gReset()
+		}
+		if(gin.clickStartedDraw && onBox) {
+			gClickDownSoundPlay()
 		}
 	}
 	
-	gin.clickReleasedDraw = 0
+	gin.clickReleasedDraw = gin.clickStartedDraw = 0
 
 	gl1.render()
+	gStateDraws++
 }
 
 function gResize(recur) {
@@ -605,8 +876,113 @@ function gResize(recur) {
 	}
 }
 
+function gLoadingDotsDraw(x, y, scale, rgb) {
+	scale = scale||2
+	for(var i=0; i<3; i++) {
+		var loops = gLoops/6 % 6
+		var a = (-loops+i*1.5)/6*Math.PI*2
+		var addy = Math.sin(a)*2
+		if(addy>0)addy=0
+		glText.draw(".", x+4+i*5*scale, y+addy, scale, 1, rgb)
+	}
+}
+
+function gAjax(url, func) {
+	gLog("gajax", url)
+	url = "https://curtastic.com/lazersniper/"+url
+	url += "&version="+gAppVersion
+		
+	//ios10 doesn't support fetch
+	var request = new XMLHttpRequest()
+	
+	request.onreadystatechange = function() {
+		if(request.readyState == 4) {
+			if(request.status == 200) {
+				var text = request.responseText
+				func(text)
+			} else {
+				gLog('ajax status='+request.status+' url='+url, request.statusText)
+			}
+		}
+	}
+	request.open("GET", url, true)
+	request.send()
+	
+	return request
+}
+
+function gUserClear() {
+	gStorageSet('hyplayUsername', '')
+	gStorageSet('hyplayUserId', '')
+	gStorageSet('hyplayUserToken', '')
+}
+
+function gHyplayUserGet(token) {
+	gAjax("userGet.php?token="+encodeURIComponent(token), function(text) {
+		if(text[0] != '{') {
+			gUserClear()
+			gLoginError = 1
+			alert("Error: "+gLoginError)
+			return
+		}
+		var user = JSON.parse(text)
+		if(!user) {
+			gUserClear()
+			gLoginError = 2
+			alert("Error: "+gLoginError)
+			return
+		}
+		if(!user.username) {
+			gUserClear()
+			gLoginError = 3
+			alert("Error: "+gLoginError)
+			return
+		}
+		gStorageSet('hyplayUsername', user.username)
+		gStorageSet('hyplayUserId', user.id)
+		gStorageSet('hyplayUserToken', token)
+		gStateSet('title')
+		window.location.hash = ''
+	})
+}
+
+function gScoreSave() {
+	gScoreSaveLoading = 1
+	gAjax("scoreSave.php?score="+gScore+"&userId="+gStorageGet('hyplayUserId')+"&userToken="+gStorageGet('hyplayUserToken'), function(text) {
+		gScoreSaveLoading = 0
+		gScores = u
+		gScoresGet()
+	})
+}
+
+function gScoresGet() {
+	gAjax("scoresGet.php?", function(text) {
+		if(text[0] != '{') {
+			gScoresGetError = 1
+			return
+		}
+		var scores = JSON.parse(text)
+		if(!scores) {
+			gScoresGetError = 2
+			return
+		}
+		if(scores.totalScores === u) {
+			gScoresGetError = 3
+			return
+		}
+		if(!scores.scores || !scores.scores.slice) {
+			gScores = []
+		} else {
+			gScores = scores.scores.slice(0,10)
+		}
+		gStateLoops = 0
+	})
+}
 var gAlienImages = []
 var gAlienDieImages = []
+var gAlien2Images = []
+var gAlien2DieImages = []
+var gAlien2HitImage
 var gWallRImage,gWallLImage,gWallDImage,gWallUImage
 var gWallDRImage,gWallDLImage,gWallULImage,gWallURImage
 var gWallInDRImage,gWallInDLImage,gWallInULImage,gWallInURImage
@@ -619,12 +995,17 @@ var gCrateImage,gCrateExplodeImage
 var gStarImage
 var gMuteButton,gMutedButton
 window.onload = function() {
+	gMuted = gStorageGet('muted') == '1'
+	
 	gCanvas = document.createElement('canvas')
 	document.body.appendChild(gCanvas)
 
 	gl1.setup(gCanvas, 'tex.png?29')
 	glText.setup()
-	glText.iconAdd("score", 0, 445, 13, 16)
+	glText.iconAdd("score", 0, 437, 15, 18)
+	glText.iconAdd("time", 16, 434, 17, 21)
+	glText.iconAdd("level", 34, 436, 18, 19)
+	glText.iconAdd("...", gLoadingDotsDraw, 0, 10, 16)
 	
 	for(var i=0;i<4;i++) {
 		gAlienImages[i] = gl1.imageMake(i*32,1,32,22)
@@ -632,6 +1013,14 @@ window.onload = function() {
 	for(var i=0;i<7;i++) {
 		gAlienDieImages[i] = gl1.imageMake(4*32+i*32,1,32,22)
 	}
+
+	for(var i=0;i<4;i++) {
+		gAlien2Images[i] = gl1.imageMake(100+i*32,26,32,22)
+	}
+	for(var i=0;i<7;i++) {
+		gAlien2DieImages[i] = gl1.imageMake(100+i*32,26+22,32,23)
+	}
+	gAlien2HitImage = gl1.imageMake(100,26+22+24,32,23)
 
 	gFloorImage = gl1.imageMake(0,74,24,24)
 	//gWallImage = gl1.imageMake(25,74,33,15)
@@ -671,16 +1060,35 @@ window.onload = function() {
 	gResize()
 	
 	gReset()
-	gStateSet('title')
+	if(location.hash) {
+		gStateSet('loginLoading')
+		gHyplayUserGet(location.hash.substr(1))
+	} else {
+		if(gStorageGet('hyplayUsername')) {
+			gStateSet('title')
+		} else {
+			gStateSet('login')
+		}
+	}
 	
 	gloop.start(gUpdate, gDraw, 60)
 
 	gLoadingDiv.innerHTML += "<br>LOADING GRAPHICS..."
 
+	gScoresGet()
+
+}
+
+function gClickUpSoundPlay() {
+	gAudio.play(gClickUpSound, gin.mouseX/gCanvasSizeX)
+}
+
+function gClickDownSoundPlay() {
+	gAudio.play(gClickDownSound, gin.mouseX/gCanvasSizeX)
 }
 
 var gPlayMusic
-var gShootSound,gBounceSound,gGuyDieSound,gExplodeSound,gStarSound
+var gShootSound,gBounceSound,gGuyDieSound,gExplodeSound,gStarSound,gCrateSound,gClickDownSound,gClickUpSound,gScoreSound,gWinSound
 function gAudioSetup() {
 	gPlayMusic = gAudio.load('play.mp3',1)
 	gShootSound = gAudio.load('shoot.wav')
@@ -688,6 +1096,12 @@ function gAudioSetup() {
 	gGuyDieSound = gAudio.load('die2.wav')
 	gExplodeSound = gAudio.load('explode.wav')
 	gStarSound = gAudio.load('star.mp3')
+	gCrateSound = gAudio.load('crate.wav')
+	gClickDownSound = gAudio.load('clickDown.wav')
+	gClickUpSound = gAudio.load('clickUp.wav')
+	gScoreSound = gAudio.load('score.mp3')
+	gWinSound = gAudio.load('win.mp3')
+	gAudio.setVolume(gPlayMusic, .5)
 }
 
 function gAngleTo(x, y, targetX, targetY) {
@@ -725,4 +1139,13 @@ function gCursorSet(cursor) {
 		gCursor = cursor
 		document.body.style.cursor = cursor
 	}
+}
+
+function gStorageGet(key) {
+	return gStorage[gStoragePrefix+key] || ''
+}
+
+function gStorageSet(key, val) {
+	gLog("gstorageset()", key, val)
+	gStorage[gStoragePrefix+key] = val
 }
