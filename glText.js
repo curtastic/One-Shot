@@ -4,12 +4,12 @@ var glText = {
 	iconsByName: {},
 	iconsByCode: {},
 	setup: function() {
-		var x=0,y=462,sizey=16
+		var x=0,y=456,sizey=18
 		for(var i=0; i<this.letters.length; i++)
 		{
 			var letter = this.letters[i]
 			var size = this.sizeXGet(letter, 1)
-			this.letterImages[letter.charCodeAt(0)] = gl1.imageMake(x, y, size, 16)
+			this.letterImages[letter.charCodeAt(0)] = gl1.imageMake(x, y, size, sizey)
 			x += size+1
 			if(letter == 'Z' || letter == 'z') {
 				x = 0
@@ -18,7 +18,7 @@ var glText = {
 		}
 	},
 	letterSizeXget: function(letter, scale) {
-		var size = this.letterSizeXBaseGet(letter)
+		var size = this.letterSizeXBaseGet(letter)+2
 		if(scale > 1 && scale < 2)
 		{
 			if(size < 9)size-=1
@@ -43,8 +43,11 @@ var glText = {
 		return 9
 	},
 	sizeXGet: function(text,scale,convertedalready) {
+		if(!convertedalready) {
+			text = this.iconsConvert(text)
+		}
 		scale = scale || 1
-		var spacing = -1*(Math.floor(scale))
+		var spacing = scale*-2
 		var x = 0
 		for(var i=0; i<text.length; i++)
 		{
@@ -63,11 +66,16 @@ var glText = {
 			icon.offsetY = y||-1
 			icon.sizeX = imageOrX.sizeX
 			icon.sizeY = imageOrX.sizeY
+		} else if(imageOrX.prototype) {
+			icon.func = imageOrX
+			icon.offsetY = y||-1
+			icon.sizeX = sizeX
+			icon.sizeY = sizeY
 		} else {
 			icon.image = gl1.imageMake(imageOrX,y,sizeX,sizeY)
 			icon.sizeX = sizeX
 			icon.sizeY = sizeY
-			icon.offsetY = -1
+			icon.offsetY = (15-sizeY)/2|0
 		}
 		this.iconsByCode[code] = this.iconsByName[name] = icon
 	},
@@ -98,7 +106,7 @@ var glText = {
 			var iconyadd = scale*3-5 | 0
 			
 			if(center) {
-				this.drawSizeX = this.sizeXGet(text,scale,1)+scale*4
+				this.drawSizeX = this.sizeXGet(text,scale,1)
 				x -= this.drawSizeX/(center==3 ? 1: 2) | 0
 			}
 			
@@ -111,17 +119,22 @@ var glText = {
 					image.rgb = rgbnow
 					if(letter == ',')addy=3
 					if(scale != 1) {
-						gl1.imageDraw(image, x-(letter=='j')*3*scale, y+addy, image.sizeX*(scale), image.sizeY*(scale))
+						gl1.imageDraw(image, x, y+addy, image.sizeX*scale, image.sizeY*scale)
 					} else
 						gl1.imageDraw(image, x, y+addy)
 				} else {
 					var icon = this.iconsByCode[letter]
 					if(icon) {
-						icon.image.rgb = rgbnow
-						gl1.imageDraw(icon.image, x, y+icon.offsetY*scale, icon.sizeX*scale, icon.sizeY*scale)
+						if(icon.func) {
+							icon.func(x, y, scale, rgbnow)
+						} else {
+							icon.image.rgb = rgbnow
+							gl1.imageDraw(icon.image, x, y+icon.offsetY*scale, icon.sizeX*scale, icon.sizeY*scale)
+							x--
+						}
 					}
 				}
-				x += (this.sizeXGet(letter,scale,1))-1 | 0
+				x += (this.sizeXGet(letter,scale,1))-scale*2 | 0
 			}
 			this.drawX = x
 			y += 16*scale | 0
